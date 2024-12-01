@@ -8,7 +8,7 @@
     pkgs = nixpkgs.legacyPackages.${system};
   in {
     devShells.${system}.default = pkgs.mkShell {
-      name = "zig";
+      name = "advent-of-code-2024";
       packages = with pkgs; [zig];
     };
     formatter.${system} = pkgs.alejandra;
