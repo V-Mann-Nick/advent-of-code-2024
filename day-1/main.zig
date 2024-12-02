@@ -1,27 +1,14 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const ArrayList = ArrayList;
 
-fn Lists(comptime T: type) type {
-    return struct {
-        left_numbers: std.ArrayList(T),
-        right_numbers: std.ArrayList(T),
-
-        const Self = @This();
-
-        fn deinit(self: Self) void {
-            self.left_numbers.deinit();
-            self.right_numbers.deinit();
-        }
-    };
-}
-
-fn parseInput(comptime T: type, allocator: Allocator) !Lists(T) {
+fn parseInput(comptime T: type, allocator: Allocator) !struct { ArrayList(T), ArrayList(T) } {
     const file = try std.fs.cwd().openFile("input.txt", .{});
     const input = try file.readToEndAlloc(allocator, 1e9);
     defer allocator.free(input);
 
-    var left_numbers = try std.ArrayList(T).initCapacity(allocator, 1000);
-    var right_numbers = try std.ArrayList(T).initCapacity(allocator, 1000);
+    var left_numbers = try ArrayList(T).initCapacity(allocator, 1000);
+    var right_numbers = try ArrayList(T).initCapacity(allocator, 1000);
     var lines_iterator = std.mem.split(u8, input, "\n");
     while (lines_iterator.next()) |line| {
         if (line.len == 0) {
@@ -37,20 +24,17 @@ fn parseInput(comptime T: type, allocator: Allocator) !Lists(T) {
         try right_numbers.append(right_number);
     }
 
-    return Lists(T){
-        .left_numbers = left_numbers,
-        .right_numbers = right_numbers,
-    };
+    return .{ left_numbers, right_numbers };
 }
 
 const testing = std.testing;
 
 test "Part 1" {
-    const lists = try parseInput(i32, testing.allocator);
-    defer lists.deinit();
-
-    const left_numbers = lists.left_numbers;
-    const right_numbers = lists.right_numbers;
+    const left_numbers, const right_numbers = try parseInput(i32, testing.allocator);
+    defer {
+        left_numbers.deinit();
+        right_numbers.deinit();
+    }
 
     std.mem.sort(i32, left_numbers.items, {}, comptime std.sort.asc(i32));
     std.mem.sort(i32, right_numbers.items, {}, comptime std.sort.asc(i32));
@@ -66,10 +50,11 @@ test "Part 1" {
 }
 
 test "Part 2" {
-    const lists = try parseInput(u32, testing.allocator);
-    defer lists.deinit();
-    const left_numbers = lists.left_numbers;
-    const right_numbers = lists.right_numbers;
+    const left_numbers, const right_numbers = try parseInput(u32, testing.allocator);
+    defer {
+        left_numbers.deinit();
+        right_numbers.deinit();
+    }
 
     const Frequencies = std.AutoHashMap(u32, u32);
     var frequencies = Frequencies.init(testing.allocator);
