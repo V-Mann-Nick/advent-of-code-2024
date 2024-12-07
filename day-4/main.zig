@@ -4,11 +4,22 @@ const print = std.debug.print;
 pub fn main() void {
     const start = std.time.microTimestamp();
 
+    part1();
+    part2();
+
+    const end = std.time.microTimestamp();
+    const micros = end - start;
+    const millis = @as(f32, @floatFromInt(micros)) / 1000;
+    print("\nExecution time: {d:.3}ms\n", .{millis});
+}
+
+pub fn part1() void {
     var total_found: u16 = 0;
     for (0..ROWS) |y| {
         for (0..COLUMNS) |x| {
             const coord = Coordinate{ .x = x, .y = y };
 
+            // From Corners
             const is_top_left = y == 0 and x == 0;
             const is_top_right = y == 0 and x + 1 == COLUMNS;
             const is_down_left = y + 1 == ROWS and x == 0;
@@ -55,12 +66,37 @@ pub fn main() void {
         }
     }
 
-    print("Found: {}\n", .{total_found});
+    print("Part 1 - Found: {}\n", .{total_found});
+}
 
-    const end = std.time.microTimestamp();
-    const micros = end - start;
-    const millis = @as(f32, @floatFromInt(micros)) / 1000;
-    print("\nExecution time: {d:.3}ms\n", .{millis});
+pub fn part2() void {
+    var total_found: u16 = 0;
+
+    for (0..ROWS) |y| {
+        for (0..COLUMNS) |x| {
+            const coord = Coordinate{ .x = x, .y = y };
+
+            if (coord.getChar() != 'A') continue;
+
+            const upLeft = coord.getAdjacant(Direction.UpLeft) orelse continue;
+            const downRight = coord.getAdjacant(Direction.DownRight) orelse continue;
+            const downLeft = coord.getAdjacant(Direction.DownLeft) orelse continue;
+            const upRight = coord.getAdjacant(Direction.UpRight) orelse continue;
+
+            // ud -> down up -> the '\' part of the X
+            // du -> up down -> the '/' part of the X
+            const is_ud_mas = upLeft.getChar() == 'M' and downRight.getChar() == 'S';
+            const is_ud_sam = upLeft.getChar() == 'S' and downRight.getChar() == 'M';
+            const is_du_mas = downLeft.getChar() == 'M' and upRight.getChar() == 'S';
+            const is_du_sam = downLeft.getChar() == 'S' and upRight.getChar() == 'M';
+
+            if ((is_ud_mas or is_ud_sam) and (is_du_mas or is_du_sam)) {
+                total_found += 1;
+            }
+        }
+    }
+
+    print("Part 2 - Found: {}\n", .{total_found});
 }
 
 const XMAS = "XMAS";
@@ -69,21 +105,19 @@ pub fn scanFrom(coord: Coordinate, direction: Direction) u16 {
     var coordinates = coord.iterator(direction);
     var found: u16 = 0;
     var xmas_idx: usize = 0;
-    while (coordinates.next()) |c| {
-        const char = c.getChar();
-
+    while (coordinates.next()) |current_coord| {
+        const char = current_coord.getChar();
         if (XMAS[xmas_idx] == char) {
             xmas_idx += 1;
-            const is_complete = xmas_idx == 4;
+            const is_complete = xmas_idx == XMAS.len;
             if (is_complete) {
                 found += 1;
                 xmas_idx = 0;
             }
+        } else if (char == 'X') {
+            xmas_idx = 1;
         } else {
             xmas_idx = 0;
-            if (XMAS[xmas_idx] == char) {
-                xmas_idx += 1;
-            }
         }
     }
     return found;
