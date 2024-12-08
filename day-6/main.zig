@@ -2,14 +2,24 @@ const std = @import("std");
 const print = std.debug.print;
 
 pub fn main() void {
-    part1();
-    part2();
+    const start = std.time.microTimestamp();
+
+    const start_and_direction = findStartAndDirection();
+    part1(start_and_direction);
+    part2(start_and_direction);
+
+    const end = std.time.microTimestamp();
+    const micros = end - start;
+    const millis = @as(f32, @floatFromInt(micros)) / 1000;
+    print("\nExecution time: {d:.3}ms\n", .{millis});
 }
 
-fn part1() void {
-    var currrent_coordinate, var current_direction = findStartAndDirection();
+fn part1(start_and_direction: CoordinateAndDirection) void {
+    var currrent_coordinate, var current_direction = start_and_direction;
 
-    var visited: [ROWS][COLUMNS]bool = [_][COLUMNS]bool{[_]bool{false} ** COLUMNS} ** ROWS;
+    var visited: [ROWS][COLUMNS]bool = [_][COLUMNS]bool{
+        [_]bool{false} ** COLUMNS,
+    } ** ROWS;
     while (true) {
         const next_coordinate = currrent_coordinate.getAdjacant(current_direction) orelse break;
         if (next_coordinate.isObstacle()) {
@@ -30,41 +40,49 @@ fn part1() void {
     print("Total visited: {}\n", .{total_visited});
 }
 
-fn part2() void {
-    const start_and_direction = findStartAndDirection();
+fn part2(start_and_direction: CoordinateAndDirection) void {
     var total_loops: u16 = 0;
+
     for (0..ROWS) |y| {
         for (0..COLUMNS) |x| {
-            const coord = Coordinate{ .x = x, .y = y };
-            if (isLoop(start_and_direction, coord)) {
+            const extra_obstacle = Coordinate{ .x = x, .y = y };
+            if (extra_obstacle.isObstacle()) continue;
+            if (std.meta.eql(start_and_direction[0], extra_obstacle)) continue;
+            if (isLoop(start_and_direction, extra_obstacle)) {
                 total_loops += 1;
             }
         }
     }
 
-    print("Total loop: {}\n", .{total_loops});
+    print("Total loops: {}\n", .{total_loops});
 }
 
 fn isLoop(start_and_direction: CoordinateAndDirection, extra_obstacle: Coordinate) bool {
     var currrent_coordinate, var current_direction = start_and_direction;
 
-    var made_direction_changes: [ROWS][COLUMNS][4]bool = [_][COLUMNS][4]bool{[_][4]bool{[_]bool{false} ** 4} ** COLUMNS} ** ROWS;
+    var made_direction_changes: [ROWS][COLUMNS][4]bool = [_][COLUMNS][4]bool{
+        [_][4]bool{
+            [_]bool{false} ** 4,
+        } ** COLUMNS,
+    } ** ROWS;
     while (true) {
         const next_coordinate = currrent_coordinate.getAdjacant(current_direction) orelse return false;
-        const is_next_extra_obstacle = extra_obstacle.x == next_coordinate.x and extra_obstacle.y == next_coordinate.y;
+        const is_next_extra_obstacle = std.meta.eql(next_coordinate, extra_obstacle);
         const is_obstacle = next_coordinate.isObstacle() or is_next_extra_obstacle;
         if (is_obstacle) {
-            const has_made_direction_change = made_direction_changes[currrent_coordinate.y][currrent_coordinate.x][@intFromEnum(current_direction)];
+            const x, const y = .{ currrent_coordinate.x, currrent_coordinate.y };
+            const direction_int = @intFromEnum(current_direction);
+            const has_made_direction_change = made_direction_changes[y][x][direction_int];
             if (has_made_direction_change) {
                 return true;
             }
-            made_direction_changes[currrent_coordinate.y][currrent_coordinate.x][@intFromEnum(current_direction)] = true;
+            made_direction_changes[y][x][direction_int] = true;
             current_direction = current_direction.turnRight();
             continue;
         }
         currrent_coordinate = next_coordinate;
     }
-    return false;
+    unreachable;
 }
 
 const CoordinateAndDirection = struct { Coordinate, Direction };
