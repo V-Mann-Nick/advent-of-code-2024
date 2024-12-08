@@ -5,8 +5,8 @@ pub fn main() void {
     const start = std.time.microTimestamp();
 
     const start_and_direction = findStartAndDirection();
-    part1(start_and_direction);
-    part2(start_and_direction);
+    part1(start_and_direction, true);
+    // part2(start_and_direction);
 
     const end = std.time.microTimestamp();
     const micros = end - start;
@@ -14,20 +14,24 @@ pub fn main() void {
     print("\nExecution time: {d:.3}ms\n", .{millis});
 }
 
-fn part1(start_and_direction: CoordinateAndDirection) void {
-    var currrent_coordinate, var current_direction = start_and_direction;
+fn part1(start_and_direction: CoordinateAndDirection, with_animation: bool) void {
+    var current_coordinate, var current_direction = start_and_direction;
 
     var visited: [ROWS][COLUMNS]bool = [_][COLUMNS]bool{
         [_]bool{false} ** COLUMNS,
     } ** ROWS;
     while (true) {
-        const next_coordinate = currrent_coordinate.getAdjacant(current_direction) orelse break;
+        if (with_animation) {
+            std.time.sleep(3e7);
+            printGridFancy(current_coordinate, &visited);
+        }
+        const next_coordinate = current_coordinate.getAdjacant(current_direction) orelse break;
         if (next_coordinate.isObstacle()) {
             current_direction = current_direction.turnRight();
             continue;
         }
-        currrent_coordinate = next_coordinate;
-        visited[currrent_coordinate.y][currrent_coordinate.x] = true;
+        current_coordinate = next_coordinate;
+        visited[current_coordinate.y][current_coordinate.x] = true;
     }
 
     var total_visited: u16 = 0;
@@ -83,6 +87,38 @@ fn isLoop(start_and_direction: CoordinateAndDirection, extra_obstacle: Coordinat
         currrent_coordinate = next_coordinate;
     }
     unreachable;
+}
+
+const MARGIN_Y: isize = 20;
+const MARGIN_X: isize = 30;
+
+fn printGridFancy(guard_coordinate: Coordinate, visited: *[ROWS][COLUMNS]bool) void {
+    var grid = std.ArrayList(u8).init(std.heap.page_allocator);
+    defer grid.deinit();
+
+    const from_row = @max(@as(isize, @intCast(guard_coordinate.y)) - MARGIN_Y, 0);
+    const to_row = @min(@as(isize, @intCast(guard_coordinate.y)) + MARGIN_Y, ROWS - 1);
+    const from_col_idx = @max(@as(isize, @intCast(guard_coordinate.x)) - MARGIN_X, 0);
+    const to_col_idx = @min(@as(isize, @intCast(guard_coordinate.x)) + MARGIN_X, COLUMNS - 1);
+
+    for (from_row..@as(usize, @intCast(to_row)) + 1) |y| {
+        for (from_col_idx..@as(usize, @intCast(to_col_idx)) + 1) |x| {
+            const coord = Coordinate{ .x = x, .y = y };
+            if (coord.isObstacle()) {
+                grid.appendSlice("🍌") catch unreachable;
+            } else if (std.meta.eql(coord, guard_coordinate)) {
+                grid.appendSlice("👮") catch unreachable;
+            } else if (visited[y][x]) {
+                grid.appendSlice("🟩") catch unreachable;
+            } else {
+                grid.appendSlice("⬛") catch unreachable;
+            }
+        }
+        grid.append('\n') catch unreachable;
+    }
+
+    print("\x1b[2J", .{}); // Clear screen
+    print("{s}", .{grid.items});
 }
 
 const CoordinateAndDirection = struct { Coordinate, Direction };
