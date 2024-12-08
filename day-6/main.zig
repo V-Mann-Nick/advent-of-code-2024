@@ -2,9 +2,14 @@ const std = @import("std");
 const print = std.debug.print;
 
 pub fn main() void {
+    part1();
+    part2();
+}
+
+fn part1() void {
     var currrent_coordinate, var current_direction = findStartAndDirection();
 
-    var visited: [ROWS][COLUMNS]bool = [_][ROWS]bool{[_]bool{false} ** COLUMNS} ** ROWS;
+    var visited: [ROWS][COLUMNS]bool = [_][COLUMNS]bool{[_]bool{false} ** COLUMNS} ** ROWS;
     while (true) {
         const next_coordinate = currrent_coordinate.getAdjacant(current_direction) orelse break;
         if (next_coordinate.isObstacle()) {
@@ -25,6 +30,45 @@ pub fn main() void {
     print("Total visited: {}\n", .{total_visited});
 }
 
+fn part2() void {
+    const start_and_direction = findStartAndDirection();
+    var total_loops: u16 = 0;
+    for (0..ROWS) |y| {
+        for (0..COLUMNS) |x| {
+            const coord = Coordinate{ .x = x, .y = y };
+            if (isLoop(start_and_direction, coord)) {
+                total_loops += 1;
+            }
+        }
+    }
+
+    print("Total loop: {}\n", .{total_loops});
+}
+
+fn isLoop(start_and_direction: CoordinateAndDirection, extra_obstacle: Coordinate) bool {
+    var currrent_coordinate, var current_direction = start_and_direction;
+
+    var made_direction_changes: [ROWS][COLUMNS][4]bool = [_][COLUMNS][4]bool{[_][4]bool{[_]bool{false} ** 4} ** COLUMNS} ** ROWS;
+    while (true) {
+        const next_coordinate = currrent_coordinate.getAdjacant(current_direction) orelse return false;
+        const is_next_extra_obstacle = extra_obstacle.x == next_coordinate.x and extra_obstacle.y == next_coordinate.y;
+        const is_obstacle = next_coordinate.isObstacle() or is_next_extra_obstacle;
+        if (is_obstacle) {
+            const has_made_direction_change = made_direction_changes[currrent_coordinate.y][currrent_coordinate.x][@intFromEnum(current_direction)];
+            if (has_made_direction_change) {
+                return true;
+            }
+            made_direction_changes[currrent_coordinate.y][currrent_coordinate.x][@intFromEnum(current_direction)] = true;
+            current_direction = current_direction.turnRight();
+            continue;
+        }
+        currrent_coordinate = next_coordinate;
+    }
+    return false;
+}
+
+const CoordinateAndDirection = struct { Coordinate, Direction };
+
 const DIRECTION_BY_CHAR = std.StaticStringMap(Direction).initComptime(.{
     .{ "<", .Left },
     .{ "^", .Up },
@@ -32,7 +76,7 @@ const DIRECTION_BY_CHAR = std.StaticStringMap(Direction).initComptime(.{
     .{ "v", .Down },
 });
 
-fn findStartAndDirection() struct { Coordinate, Direction } {
+fn findStartAndDirection() CoordinateAndDirection {
     for (0..ROWS) |y| {
         for (0..COLUMNS) |x| {
             const coord = Coordinate{ .x = x, .y = y };
@@ -46,7 +90,7 @@ fn findStartAndDirection() struct { Coordinate, Direction } {
 const ROWS: usize = 130;
 const COLUMNS: usize = 130;
 
-const Direction = enum {
+const Direction = enum(u2) {
     Left,
     Up,
     Right,
