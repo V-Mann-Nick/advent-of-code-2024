@@ -3,67 +3,83 @@ const std = @import("std");
 pub fn main() void {
     const start = std.time.microTimestamp();
 
-    var eq_it = EquationsIterator.init();
-    var total: u64 = 0;
-    while (eq_it.next()) |equation| {
-        var rhs_it = equation.rhsIterator();
-        const b = rhs_it.next().?;
-        var rhs_it_copy = rhs_it.copy();
-        var rhs_it_copy_2 = rhs_it.copy();
-        if (compute(0, b, Op.Add, equation.lhs(), &rhs_it)) {
-            total += equation.lhs();
-            continue;
-        }
-        if (compute(1, b, Op.Multiply, equation.lhs(), &rhs_it_copy)) {
-            total += equation.lhs();
-            continue;
-        }
-        if (compute(0, b, Op.Concat, equation.lhs(), &rhs_it_copy_2)) {
-            total += equation.lhs();
-            continue;
-        }
-    }
+    part1();
+    part2();
 
-    std.debug.print("Total: {}\n", .{total});
     const end = std.time.microTimestamp();
     const micros = end - start;
     const millis = @as(f32, @floatFromInt(micros)) / 1000;
     std.debug.print("\nExecution time: {d:.3}ms\n", .{millis});
 }
 
-const Op = enum { Add, Multiply, Concat };
-
-fn countDigits(n: u64) u64 {
-    if (n == 0) return 1;
-    var count: u64 = 0;
-    var m = n;
-    while (m != 0) {
-        m = @divFloor(m, 10);
-        count += 1;
-    }
-    return count;
+fn part1() void {
+    const total = solve(&[_]Op{ .Add, .Multiply });
+    std.debug.print("Total Part 1: {}\n", .{total});
 }
 
-fn compute(a: u64, b: u64, op: Op, lhs: u64, rhs_iterator: *Equation.RhsIterator) bool {
-    const result = switch (op) {
+fn part2() void {
+    const total = solve(&[_]Op{ .Add, .Multiply, .Concat });
+    std.debug.print("Total Part 2: {}\n", .{total});
+}
+
+fn solve(operations: []const Op) u64 {
+    var equations_iterator = EquationsIterator.init();
+
+    var total: u64 = 0;
+    equations: while (equations_iterator.next()) |equation| {
+        const lhs = equation.lhs();
+        for (operations) |op| {
+            var rhs_iterator = equation.rhsIterator();
+            const a, const b = .{ rhs_iterator.next().?, rhs_iterator.next().? };
+            if (compute(a, b, op, lhs, &rhs_iterator, operations)) {
+                total += lhs;
+                continue :equations;
+            }
+        }
+    }
+
+    return total;
+}
+
+const Op = enum { Add, Multiply, Concat };
+
+fn compute(
+    a: u64,
+    b: u64,
+    op: Op,
+    lhs: u64,
+    rhs_iterator: *RhsIterator,
+    operations: []const Op,
+) bool {
+    const next_a = switch (op) {
         .Add => a + b,
         .Multiply => a * b,
-        .Concat => a * std.math.pow(u64, 10, countDigits(b)) + b,
+        .Concat => concatIntegers(a, b),
     };
 
-    if (result > lhs) {
+    if (next_a > lhs) {
         return false;
     }
 
-    const operations = [_]Op{ .Add, .Concat, .Multiply };
     for (operations) |next_op| {
         var rhs_iterator_copy = rhs_iterator.copy();
-        const next_number = rhs_iterator_copy.next() orelse return result == lhs;
-        if (compute(result, next_number, next_op, lhs, &rhs_iterator_copy)) {
+        const next_b = rhs_iterator_copy.next() orelse return next_a == lhs;
+        if (compute(next_a, next_b, next_op, lhs, &rhs_iterator_copy, operations)) {
             return true;
         }
     }
+
     return false;
+}
+
+fn concatIntegers(a: u64, b: u64) u64 {
+    var b_digit_count: u64 = 0;
+    var b_reducer = b;
+    while (b_reducer != 0) {
+        b_reducer = @divFloor(b_reducer, 10);
+        b_digit_count += 1;
+    }
+    return a * std.math.pow(u64, 10, b_digit_count) + b;
 }
 
 const Equation = struct {
@@ -74,30 +90,30 @@ const Equation = struct {
         return std.fmt.parseInt(u64, self.lhs_raw, 10) catch unreachable;
     }
 
-    const RhsIterator = struct {
-        split_iterator: std.mem.SplitIterator(u8, .sequence),
-
-        fn init(rhs: []const u8) RhsIterator {
-            const split_iterator = std.mem.split(u8, rhs, " ");
-            return RhsIterator{ .split_iterator = split_iterator };
-        }
-
-        fn copy(self: *const RhsIterator) RhsIterator {
-            return RhsIterator{ .split_iterator = std.mem.SplitIterator(u8, .sequence){
-                .buffer = self.split_iterator.buffer,
-                .delimiter = self.split_iterator.delimiter,
-                .index = self.split_iterator.index,
-            } };
-        }
-
-        fn next(self: *RhsIterator) ?u64 {
-            const next_number_str = self.split_iterator.next() orelse return null;
-            return std.fmt.parseInt(u64, next_number_str, 10) catch unreachable;
-        }
-    };
-
     fn rhsIterator(self: *const Equation) RhsIterator {
         return RhsIterator.init(self.rhs_raw);
+    }
+};
+
+const RhsIterator = struct {
+    split_iterator: std.mem.SplitIterator(u8, .sequence),
+
+    fn init(rhs: []const u8) RhsIterator {
+        const split_iterator = std.mem.split(u8, rhs, " ");
+        return RhsIterator{ .split_iterator = split_iterator };
+    }
+
+    fn copy(self: *const RhsIterator) RhsIterator {
+        return RhsIterator{ .split_iterator = std.mem.SplitIterator(u8, .sequence){
+            .buffer = self.split_iterator.buffer,
+            .delimiter = self.split_iterator.delimiter,
+            .index = self.split_iterator.index,
+        } };
+    }
+
+    fn next(self: *RhsIterator) ?u64 {
+        const next_number_str = self.split_iterator.next() orelse return null;
+        return std.fmt.parseInt(u64, next_number_str, 10) catch unreachable;
     }
 };
 
