@@ -1,5 +1,6 @@
 const std = @import("std");
 const print = std.debug.print;
+const Allocator = std.mem.Allocator;
 
 const PreviousAntennas = std.BoundedArray(Coordinate, 4);
 const PreviousAntennasByAntenna = std.AutoHashMap(u8, PreviousAntennas);
@@ -11,11 +12,35 @@ pub fn main() !void {
     defer arena.deinit();
     const allocator = arena.allocator();
 
+    try part1(allocator);
+    try part2(allocator);
+
+    const end = std.time.microTimestamp();
+    const micros = end - start;
+    const millis = @as(f32, @floatFromInt(micros)) / 1000;
+    print("\nExecution time: {d:.3}ms\n", .{millis});
+}
+
+fn part1(allocator: Allocator) !void {
+    const total_antinodes = try solve(allocator, .SameDistance);
+    print("Total antinodes Part 1: {}\n", .{total_antinodes});
+}
+
+fn part2(allocator: Allocator) !void {
+    const total_antinodes = try solve(allocator, .Resonant);
+    print("Total antinodes Part 2: {}\n", .{total_antinodes});
+}
+
+const SolveMode = enum { SameDistance, Resonant };
+
+fn solve(allocator: Allocator, solve_mode: SolveMode) !u16 {
     var previousAntennasByAntenna = PreviousAntennasByAntenna.init(allocator);
+    defer previousAntennasByAntenna.deinit();
 
     var antinodes: [ROWS][COLUMNS]bool = [_][COLUMNS]bool{
         [_]bool{false} ** COLUMNS,
     } ** ROWS;
+
     for (0..ROWS) |y| {
         for (0..COLUMNS) |x| {
             const coord = Coordinate{ .x = x, .y = y };
@@ -26,8 +51,8 @@ pub fn main() !void {
             if (!result.found_existing) {
                 result.value_ptr.* = initPreviousAntennas();
             }
-
             const previousAntennas = result.value_ptr;
+
             for (previousAntennas.*.slice()) |previousAntenna| {
                 const pairs = [_]struct { Coordinate, Coordinate }{
                     .{ coord, previousAntenna },
@@ -36,8 +61,18 @@ pub fn main() !void {
                 for (pairs) |pair| {
                     const a, const b = pair;
                     const move = Move.betweenCoordinates(a, b);
-                    const antinode = b.makeMove(move) orelse continue;
-                    antinodes[antinode.y][antinode.x] = true;
+                    switch (solve_mode) {
+                        .SameDistance => {
+                            const antinode = b.makeMove(move) orelse continue;
+                            antinodes[antinode.y][antinode.x] = true;
+                        },
+                        .Resonant => {
+                            var move_iterator = MoveIterator.init(b, move);
+                            while (move_iterator.next()) |antinode| {
+                                antinodes[antinode.y][antinode.x] = true;
+                            }
+                        },
+                    }
                 }
             }
 
@@ -52,12 +87,7 @@ pub fn main() !void {
         }
     }
 
-    print("Total antinodes: {}\n", .{total_antinodes});
-
-    const end = std.time.microTimestamp();
-    const micros = end - start;
-    const millis = @as(f32, @floatFromInt(micros)) / 1000;
-    print("\nExecution time: {d:.3}ms\n", .{millis});
+    return total_antinodes;
 }
 
 fn initPreviousAntennas() PreviousAntennas {
@@ -77,6 +107,24 @@ const Move = struct {
         const b_x = @as(isize, @intCast(b.x));
         const b_y = @as(isize, @intCast(b.y));
         return Move{ .x = b_x - a_x, .y = b_y - a_y };
+    }
+};
+
+const MoveIterator = struct {
+    current_coordinate: ?Coordinate,
+    move: Move,
+
+    fn init(starting_coordinate: Coordinate, move: Move) MoveIterator {
+        return MoveIterator{
+            .current_coordinate = starting_coordinate,
+            .move = move,
+        };
+    }
+
+    fn next(self: *MoveIterator) ?Coordinate {
+        const current_coordinate = self.current_coordinate orelse return null;
+        self.current_coordinate = current_coordinate.makeMove(self.move);
+        return current_coordinate;
     }
 };
 
