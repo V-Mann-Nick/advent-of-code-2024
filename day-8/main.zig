@@ -1,19 +1,11 @@
 const std = @import("std");
 const print = std.debug.print;
-const Allocator = std.mem.Allocator;
-
-const PreviousAntennas = std.BoundedArray(Coordinate, 4);
-const PreviousAntennasByAntenna = std.AutoHashMap(u8, PreviousAntennas);
 
 pub fn main() !void {
     const start = std.time.microTimestamp();
 
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    try part1(allocator);
-    try part2(allocator);
+    try part1();
+    try part2();
 
     const end = std.time.microTimestamp();
     const micros = end - start;
@@ -21,21 +13,20 @@ pub fn main() !void {
     print("\nExecution time: {d:.3}ms\n", .{millis});
 }
 
-fn part1(allocator: Allocator) !void {
-    const total_antinodes = try solve(allocator, .SameDistance);
+fn part1() !void {
+    const total_antinodes = try solve(.SameDistance);
     print("Total antinodes Part 1: {}\n", .{total_antinodes});
 }
 
-fn part2(allocator: Allocator) !void {
-    const total_antinodes = try solve(allocator, .Resonant);
+fn part2() !void {
+    const total_antinodes = try solve(.Resonant);
     print("Total antinodes Part 2: {}\n", .{total_antinodes});
 }
 
 const SolveMode = enum { SameDistance, Resonant };
 
-fn solve(allocator: Allocator, solve_mode: SolveMode) !u16 {
-    var previousAntennasByAntenna = PreviousAntennasByAntenna.init(allocator);
-    defer previousAntennasByAntenna.deinit();
+fn solve(solve_mode: SolveMode) !u16 {
+    var previousAntennasByAntenna = PreviousAntennasByAntenna.init();
 
     var antinodes: [ROWS][COLUMNS]bool = [_][COLUMNS]bool{
         [_]bool{false} ** COLUMNS,
@@ -47,11 +38,7 @@ fn solve(allocator: Allocator, solve_mode: SolveMode) !u16 {
 
             const antenna = coord.getAntenna() orelse continue;
 
-            const result = try previousAntennasByAntenna.getOrPut(antenna);
-            if (!result.found_existing) {
-                result.value_ptr.* = initPreviousAntennas();
-            }
-            const previousAntennas = result.value_ptr;
+            const previousAntennas = previousAntennasByAntenna.get(antenna);
 
             for (previousAntennas.*.slice()) |previousAntenna| {
                 const pairs = [_]struct { Coordinate, Coordinate }{
@@ -76,7 +63,7 @@ fn solve(allocator: Allocator, solve_mode: SolveMode) !u16 {
                 }
             }
 
-            try previousAntennas.*.append(coord);
+            try previousAntennas.append(coord);
         }
     }
 
@@ -90,9 +77,44 @@ fn solve(allocator: Allocator, solve_mode: SolveMode) !u16 {
     return total_antinodes;
 }
 
+const PreviousAntennas = std.BoundedArray(Coordinate, 4);
+
 fn initPreviousAntennas() PreviousAntennas {
     return PreviousAntennas.init(0) catch unreachable;
 }
+
+const PreviousAntennasByAntenna = struct {
+    const DATA_LEN = 'z' - '0' + 1;
+
+    data: [DATA_LEN]PreviousAntennas,
+
+    fn getIdx(antenna: u8) u8 {
+        return antenna - 48;
+    }
+
+    const ALL_ANTENNAS = blk: {
+        @setEvalBranchQuota(5000);
+        var antennas = std.BoundedArray(u8, input.len).init(0) catch unreachable;
+        for (input) |char| {
+            if (char != '.' and char != '\n') {
+                antennas.append(char) catch unreachable;
+            }
+        }
+        break :blk antennas;
+    };
+
+    fn init() PreviousAntennasByAntenna {
+        var data: [DATA_LEN]PreviousAntennas = undefined;
+        for (ALL_ANTENNAS.slice()) |antenna| {
+            data[getIdx(antenna)] = initPreviousAntennas();
+        }
+        return PreviousAntennasByAntenna{ .data = data };
+    }
+
+    fn get(self: *PreviousAntennasByAntenna, antenna: u8) *PreviousAntennas {
+        return &self.data[getIdx(antenna)];
+    }
+};
 
 const ROWS = 50;
 const COLUMNS = 50;
