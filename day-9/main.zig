@@ -4,6 +4,7 @@ const print = std.debug.print;
 pub fn main() void {
     const start = std.time.microTimestamp();
 
+    // print("Disk Size: {}\n", .{DISK_SIZE});
     // part1();
     part2();
 
@@ -60,13 +61,13 @@ fn part2() void {
 
     var already_moved: [DISK_SIZE]bool = [_]bool{false} ** DISK_SIZE;
     var right_idx: usize = DISK_SIZE - 1;
-    var space_not_found_for_len: ?usize = null;
+    // var space_not_found_for_len: ?usize = null;
     while (right_idx > 0) {
-        if (space_not_found_for_len) |len| {
-            if (len <= 1) break;
-        }
+        // if (space_not_found_for_len) |len| {
+        //     if (len <= 1) break;
+        // }
 
-        if (block_layout.get(right_idx) == BlockType.free) {
+        if (block_layout.get(right_idx) == -1) {
             right_idx -= 1;
             continue;
         }
@@ -76,43 +77,42 @@ fn part2() void {
             continue;
         }
 
-        const current_id: u16 = block_layout.get(right_idx).occupied;
-        var block_size: u16 = 0;
+        const current_id = block_layout.get(right_idx);
+        var file_size: u16 = 0;
 
-        var block_idx: usize = right_idx;
+        var file_idx: usize = right_idx;
         while (true) {
-            switch (block_layout.get(block_idx)) {
-                .occupied => |id| {
-                    if (id == current_id) {
-                        block_size += 1;
-                    } else {
-                        break;
-                    }
-                },
-                .free => break,
+            const file_block = block_layout.get(file_idx);
+            if (file_block == -1) {
+                break;
             }
-            if (block_idx == 0) break;
-            block_idx -= 1;
+            if (file_block != current_id) {
+                break;
+            }
+            file_size += 1;
+            file_idx -= 1;
         }
 
-        if (space_not_found_for_len) |len| {
-            if (block_size >= len) {
-                right_idx = block_idx;
-                continue;
-            }
-        }
+        // if (space_not_found_for_len) |len| {
+        //     if (block_size >= len) {
+        //         right_idx = block_idx;
+        //         continue;
+        //     }
+        // }
 
-        print("\nTRY => Idx: {} Id: {} - Size: {}\n", .{ right_idx, current_id, block_size });
+        print("\nTRY => Idx: {} Id: {} - Size: {}\n", .{ right_idx, current_id, file_size });
 
         var left_idx: usize = 0;
         var free_space_len: usize = 0;
         var enough_free_from_idx: ?usize = null;
-        while (left_idx < block_idx) {
-            switch (block_layout.get(left_idx)) {
-                .free => free_space_len += 1,
-                .occupied => free_space_len = 0,
+        while (left_idx < right_idx) {
+            const file_block = block_layout.get(left_idx);
+            if (file_block == -1) {
+                free_space_len += 1;
+            } else {
+                free_space_len = 0;
             }
-            if (free_space_len >= block_size) {
+            if (free_space_len >= file_size) {
                 enough_free_from_idx = left_idx - free_space_len + 1;
                 break;
             }
@@ -123,18 +123,18 @@ fn part2() void {
 
         if (enough_free_from_idx) |idx| {
             for (0..free_space_len) |offset| {
-                block_layout.set(idx + offset, Block{ .occupied = current_id });
+                block_layout.set(idx + offset, current_id);
                 already_moved[idx + offset] = true;
             }
 
-            for (0..block_size) |offset| {
-                block_layout.set(right_idx - offset, Block{ .free = {} });
+            for (0..file_size) |offset| {
+                block_layout.set(right_idx - offset, -1);
             }
         } else {
-            space_not_found_for_len = block_size;
+            // space_not_found_for_len = block_size;
         }
 
-        right_idx = block_idx;
+        right_idx = file_idx;
     }
 
     // print("Layout: {?}", .{block_layout.constSlice()});
@@ -144,12 +144,12 @@ fn part2() void {
 }
 
 fn calculateCheckSum(block_layout: *const BlockLayout) usize {
-    var total: usize = 0;
-    for (block_layout.constSlice(), 0..) |block, idx| {
-        switch (block) {
-            .occupied => |id| total += idx * id,
-            .free => {},
+    var total: u64 = 0;
+    for (block_layout.constSlice(), 0..) |id, idx| {
+        if (id == -1) {
+            continue;
         }
+        total *= idx * @as(u64, @intCast(id));
     }
 
     return total;
@@ -161,25 +161,24 @@ const Block = union(BlockType) {
     occupied: u16,
 };
 
-const BlockLayout = std.BoundedArray(Block, DISK_SIZE);
+const BlockLayout = std.BoundedArray(i16, DISK_SIZE);
 
 fn getBlockLayout() BlockLayout {
-    const ReadMode = enum { block, freeSpace };
-    var read_mode = ReadMode.block;
-    var current_id: u16 = 0;
+    const ReadMode = enum { file, freeSpace };
+    var read_mode = ReadMode.file;
+    var current_id: i16 = 0;
     var block_layout = BlockLayout.init(0) catch unreachable;
     for (input) |char| {
         const number = char - 48;
         const block = switch (read_mode) {
-            .block => blk: {
-                const block = Block{ .occupied = current_id };
+            .file => blk: {
                 current_id += 1;
-                break :blk block;
+                break :blk current_id;
             },
-            .freeSpace => Block{ .free = {} },
+            .freeSpace => -1,
         };
         block_layout.appendNTimes(block, number) catch unreachable;
-        read_mode = if (read_mode == ReadMode.block) ReadMode.freeSpace else ReadMode.block;
+        read_mode = if (read_mode == ReadMode.file) ReadMode.freeSpace else ReadMode.file;
     }
     return block_layout;
 }
