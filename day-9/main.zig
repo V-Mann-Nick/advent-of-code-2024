@@ -4,8 +4,11 @@ const print = std.debug.print;
 pub fn main() void {
     const start = std.time.microTimestamp();
 
-    // print("Disk Size: {}\n", .{DISK_SIZE});
-    // part1();
+    print("Disk Size: {}\n", .{DISK_SIZE});
+
+    part1();
+
+    print("Part 2 may take a while...\n", .{});
     part2();
 
     const end = std.time.microTimestamp();
@@ -22,7 +25,7 @@ fn part1() void {
 
     outer: while (true) {
         while (true) {
-            if (block_layout.get(left_idx) == BlockType.free) {
+            if (block_layout.get(left_idx) == -1) {
                 break;
             }
             left_idx += 1;
@@ -32,7 +35,7 @@ fn part1() void {
         }
 
         while (true) {
-            if (block_layout.get(right_idx) == BlockType.occupied) {
+            if (block_layout.get(right_idx) != -1) {
                 break;
             }
             right_idx -= 1;
@@ -42,18 +45,11 @@ fn part1() void {
         }
 
         block_layout.set(left_idx, block_layout.get(right_idx));
-        block_layout.set(right_idx, Block{ .free = {} });
+        block_layout.set(right_idx, -1);
     }
 
-    var total: usize = 0;
-    for (block_layout.constSlice(), 0..) |block, idx| {
-        switch (block) {
-            .occupied => |id| total += idx * id,
-            .free => break,
-        }
-    }
-
-    print("Checksum: {}\n", .{total});
+    const total = calculateCheckSum(&block_layout);
+    print("Checksum Part 1: {}\n", .{total});
 }
 
 fn part2() void {
@@ -61,11 +57,12 @@ fn part2() void {
 
     var already_moved: [DISK_SIZE]bool = [_]bool{false} ** DISK_SIZE;
     var right_idx: usize = DISK_SIZE - 1;
-    // var space_not_found_for_len: ?usize = null;
-    while (right_idx > 0) {
-        // if (space_not_found_for_len) |len| {
-        //     if (len <= 1) break;
-        // }
+    var space_not_found_for_len: ?usize = null;
+    var packed_until_idx: usize = 0;
+    outer: while (right_idx > 0) {
+        if (space_not_found_for_len) |len| {
+            if (len <= 1) break;
+        }
 
         if (block_layout.get(right_idx) == -1) {
             right_idx -= 1;
@@ -80,6 +77,7 @@ fn part2() void {
         const current_id = block_layout.get(right_idx);
         var file_size: u16 = 0;
 
+        print("\nRight idx: {}\n", .{right_idx});
         var file_idx: usize = right_idx;
         while (true) {
             const file_block = block_layout.get(file_idx);
@@ -90,26 +88,32 @@ fn part2() void {
                 break;
             }
             file_size += 1;
+            if (file_idx == 0) {
+                break :outer;
+            }
             file_idx -= 1;
         }
 
-        // if (space_not_found_for_len) |len| {
-        //     if (block_size >= len) {
-        //         right_idx = block_idx;
-        //         continue;
-        //     }
-        // }
+        if (space_not_found_for_len) |len| {
+            if (file_size >= len) {
+                right_idx = file_idx;
+                continue;
+            }
+        }
 
-        print("\nTRY => Idx: {} Id: {} - Size: {}\n", .{ right_idx, current_id, file_size });
+        print("TRY {{ from: {} }} => Id: {} - Size: {}\n", .{ packed_until_idx, current_id, file_size });
 
-        var left_idx: usize = 0;
+        var left_idx: usize = packed_until_idx;
         var free_space_len: usize = 0;
         var enough_free_from_idx: ?usize = null;
+        var has_encountered_free = false;
         while (left_idx < right_idx) {
             const file_block = block_layout.get(left_idx);
             if (file_block == -1) {
+                has_encountered_free = true;
                 free_space_len += 1;
             } else {
+                if (!has_encountered_free) packed_until_idx = left_idx;
                 free_space_len = 0;
             }
             if (free_space_len >= file_size) {
@@ -119,9 +123,8 @@ fn part2() void {
             left_idx += 1;
         }
 
-        print("FREE => Idx: {?} - Len: {}\n", .{ enough_free_from_idx, free_space_len });
-
         if (enough_free_from_idx) |idx| {
+            print("FREE => Idx: {?} - Len: {}\n", .{ idx, free_space_len });
             for (0..free_space_len) |offset| {
                 block_layout.set(idx + offset, current_id);
                 already_moved[idx + offset] = true;
@@ -131,13 +134,12 @@ fn part2() void {
                 block_layout.set(right_idx - offset, -1);
             }
         } else {
-            // space_not_found_for_len = block_size;
+            print("NO FREE FOUND => Len: {}\n", .{file_size});
+            space_not_found_for_len = file_size;
         }
 
         right_idx = file_idx;
     }
-
-    // print("Layout: {?}", .{block_layout.constSlice()});
 
     const total = calculateCheckSum(&block_layout);
     print("Total Part 2: {}\n", .{total});
@@ -149,7 +151,7 @@ fn calculateCheckSum(block_layout: *const BlockLayout) usize {
         if (id == -1) {
             continue;
         }
-        total *= idx * @as(u64, @intCast(id));
+        total += idx * @as(u64, @intCast(id));
     }
 
     return total;
@@ -172,8 +174,9 @@ fn getBlockLayout() BlockLayout {
         const number = char - 48;
         const block = switch (read_mode) {
             .file => blk: {
+                const id = current_id;
                 current_id += 1;
-                break :blk current_id;
+                break :blk id;
             },
             .freeSpace => -1,
         };
