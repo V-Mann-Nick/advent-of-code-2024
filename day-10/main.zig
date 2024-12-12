@@ -1,34 +1,57 @@
 const std = @import("std");
 const print = std.debug.print;
 
+const ReachedSummits = [ROWS][COLUMNS]bool;
+
 pub fn main() void {
-    var summits_found: u16 = 0;
+    const start = std.time.microTimestamp();
+
+    var summits_reachable_for_all_trailheads: u16 = 0;
+    var distinct_summit_trails: u16 = 0;
     for (0..ROWS) |y| {
         for (0..COLUMNS) |x| {
             const coord = Coordinate{ .x = x, .y = y };
 
             if (!coord.isTrailHead()) continue;
 
-            print("Explore from: x: {} - y: {}\n", .{ coord.x, coord.y });
-            summits_found += exploreTrail(coord);
+            var reached_summits: ReachedSummits = [_][COLUMNS]bool{
+                [_]bool{false} ** COLUMNS,
+            } ** ROWS;
+            distinct_summit_trails += exploreTrail(coord, &reached_summits);
+            summits_reachable_for_all_trailheads += sumReachableSummits(&reached_summits);
         }
     }
 
-    print("Summits found: {}\n", .{summits_found});
+    print("Summits reachable for all trailheads (Part 1): {}\n", .{summits_reachable_for_all_trailheads});
+    print("Distinct trails to summits for all trailheads (Part 2): {}\n", .{distinct_summit_trails});
+
+    const end = std.time.microTimestamp();
+    const micros = end - start;
+    const millis = @as(f32, @floatFromInt(micros)) / 1000;
+    print("\nExecution time: {d:.3}ms\n", .{millis});
 }
 
-fn exploreTrail(coordinate: Coordinate) u16 {
+fn sumReachableSummits(reached_summits: *ReachedSummits) u16 {
+    var total: u16 = 0;
+    for (reached_summits) |row| {
+        for (row) |reached_summit| {
+            if (reached_summit) total += 1;
+        }
+    }
+    return total;
+}
+
+fn exploreTrail(coordinate: Coordinate, reached_summits: *ReachedSummits) u16 {
     if (coordinate.isHighest()) {
+        reached_summits[coordinate.y][coordinate.x] = true;
         return 1;
     }
-    var summits_found: u16 = 0;
+    var total_summits: u16 = 0;
     const next_steps = coordinate.nextSteps();
-    // print("Next Steps: {?}\n", .{next_steps});
     for (next_steps.constSlice()) |next| {
-        print("Next: {?}\n", .{next});
-        summits_found += exploreTrail(next);
+        total_summits += exploreTrail(next, reached_summits);
     }
-    return summits_found;
+    return total_summits;
 }
 
 const NextSteps = std.BoundedArray(Coordinate, 4);
@@ -65,7 +88,6 @@ const Coordinate = struct {
                 if (adjacent_char <= self_char) {
                     continue;
                 }
-                print("Distance: {} ({} - {})\n", .{ adjacent_char - self_char, adjacent_char, self_char });
                 if (adjacent_char - self_char != 1) {
                     continue;
                 }
