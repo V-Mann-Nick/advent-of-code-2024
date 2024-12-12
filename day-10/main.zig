@@ -1,8 +1,6 @@
 const std = @import("std");
 const print = std.debug.print;
 
-const ReachedSummits = [ROWS][COLUMNS]bool;
-
 pub fn main() void {
     var summits_found: u16 = 0;
     for (0..ROWS) |y| {
@@ -11,38 +9,26 @@ pub fn main() void {
 
             if (!coord.isTrailHead()) continue;
 
-            var reached_summits: ReachedSummits = [_][COLUMNS]bool{
-                [_]bool{false} ** COLUMNS,
-            } ** ROWS;
             print("Explore from: x: {} - y: {}\n", .{ coord.x, coord.y });
-            exploreTrail(coord, &reached_summits);
-            summits_found += sumAllSummits(&reached_summits);
+            summits_found += exploreTrail(coord);
         }
     }
 
     print("Summits found: {}\n", .{summits_found});
 }
 
-fn sumAllSummits(reached_summits: *ReachedSummits) u16 {
-    var total: u16 = 0;
-    for (reached_summits) |row| {
-        for (row) |reached_summit| {
-            if (reached_summit) total += 1;
-        }
-    }
-    return total;
-}
-
-fn exploreTrail(coordinate: Coordinate, reached_summits: *ReachedSummits) void {
+fn exploreTrail(coordinate: Coordinate) u16 {
     if (coordinate.isHighest()) {
-        reached_summits[coordinate.y][coordinate.x] = true;
+        return 1;
     }
+    var summits_found: u16 = 0;
     const next_steps = coordinate.nextSteps();
     // print("Next Steps: {?}\n", .{next_steps});
     for (next_steps.constSlice()) |next| {
         print("Next: {?}\n", .{next});
-        exploreTrail(next, reached_summits);
+        summits_found += exploreTrail(next);
     }
+    return summits_found;
 }
 
 const NextSteps = std.BoundedArray(Coordinate, 4);
