@@ -49,11 +49,8 @@ fn PebbleCounter(comptime depth: comptime_int) type {
 
         fn solve(self: *Self, starting_pebbles: []const u64) !u64 {
             var total_pebbles: u64 = 0;
-            for (0..depth) |current_depth| {
-                for (starting_pebbles) |pebble| {
-                    total_pebbles += try self.countPebbles(pebble, current_depth);
-                }
-                if (current_depth != depth - 1) total_pebbles = 0;
+            for (starting_pebbles) |pebble| {
+                total_pebbles += try self.countPebbles(pebble, depth - 1);
             }
             return total_pebbles;
         }
