@@ -5,21 +5,25 @@ pub fn main() void {
 }
 
 fn part1() void {
-    var total_price: usize = 0;
+    var total_price_part1: usize = 0;
+    var total_price_part2: usize = 0;
     var visited: Visited = [_][COLUMNS]bool{
         [_]bool{false} ** COLUMNS,
     } ** ROWS;
     for (0..ROWS) |y| {
         for (0..COLUMNS) |x| {
             if (visited[y][x]) continue;
-            total_price += RegionExplorer.explore(
+            const price_part1, const price_part2 = RegionExplorer.explore(
                 .{ .x = x, .y = y },
                 &visited,
             );
+            total_price_part1 += price_part1;
+            total_price_part2 += price_part2;
         }
     }
 
-    std.debug.print("Total price: {}\n", .{total_price});
+    std.debug.print("Total price part 1: {}\n", .{total_price_part1});
+    std.debug.print("Total price part 2: {}\n", .{total_price_part2});
 }
 
 const Visited = [ROWS][COLUMNS]bool;
@@ -29,17 +33,22 @@ const RegionExplorer = struct {
     plot_type: u8,
     area: usize,
     perimeter: usize,
+    corners: usize,
 
-    fn explore(starting_plot: Plot, visited: *Visited) usize {
+    fn explore(starting_plot: Plot, visited: *Visited) [2]usize {
         const plot_type = starting_plot.getChar();
         var self = RegionExplorer{
             .visited = visited,
             .plot_type = plot_type,
             .area = 0,
             .perimeter = 0,
+            .corners = 0,
         };
         self.visitPlot(starting_plot);
-        return self.area * self.perimeter;
+        return .{
+            self.area * self.perimeter,
+            self.area * self.corners,
+        };
     }
 
     fn visitPlot(self: *RegionExplorer, plot: Plot) void {
@@ -49,6 +58,7 @@ const RegionExplorer = struct {
 
         self.area += 1;
         self.visited[plot.y][plot.x] = true;
+        self.corners += checkForCorners(plot);
 
         var neighbour_count: usize = 0;
         const directions = [_]Direction{ .Left, .Up, .Right, .Down };
@@ -63,9 +73,63 @@ const RegionExplorer = struct {
 
         self.perimeter += 4 - neighbour_count;
     }
+
+    fn checkForCorners(plot: Plot) usize {
+        var corners: usize = 0;
+        const plot_type = plot.getChar();
+
+        const left = plot.getAdjacant(.Left);
+        const up = plot.getAdjacant(.Up);
+        const right = plot.getAdjacant(.Right);
+        const down = plot.getAdjacant(.Down);
+
+        const outer_edge_checks = [_][2]?Plot{
+            .{ left, up },
+            .{ up, right },
+            .{ right, down },
+            .{ down, left },
+        };
+
+        for (outer_edge_checks) |adjacent_plots| {
+            const a_adj, const b_adj = adjacent_plots;
+
+            const is_a_other = a_adj == null or a_adj.?.getChar() != plot_type;
+            const is_b_other = b_adj == null or b_adj.?.getChar() != plot_type;
+
+            if (is_a_other and is_b_other) {
+                corners += 1;
+            }
+        }
+
+        const up_left = plot.getAdjacant(.UpLeft);
+        const up_right = plot.getAdjacant(.UpRight);
+        const down_right = plot.getAdjacant(.DownRight);
+        const down_left = plot.getAdjacant(.DownLeft);
+
+        const inner_edge_checks = [_][3]?Plot{
+            .{ left, up_left, up },
+            .{ up, up_right, right },
+            .{ right, down_right, down },
+            .{ down, down_left, left },
+        };
+
+        for (inner_edge_checks) |adjacent_plots| {
+            const a_adj, const diag, const b_adj = adjacent_plots;
+
+            const is_a_same = a_adj != null and a_adj.?.getChar() == plot_type;
+            const is_diag_other = diag != null and diag.?.getChar() != plot_type;
+            const is_b_same = b_adj != null and b_adj.?.getChar() == plot_type;
+
+            if (is_a_same and is_diag_other and is_b_same) {
+                corners += 1;
+            }
+        }
+
+        return corners;
+    }
 };
 
-const Direction = enum { Left, Up, Right, Down };
+const Direction = enum { Left, UpLeft, Up, UpRight, Right, DownRight, Down, DownLeft };
 
 const Plot = struct {
     x: usize,
@@ -85,17 +149,33 @@ const Plot = struct {
                 if (self.x == 0) return null;
                 return Plot{ .x = self.x - 1, .y = self.y };
             },
+            .UpLeft => {
+                if (self.x == 0 or self.y == 0) return null;
+                return Plot{ .x = self.x - 1, .y = self.y - 1 };
+            },
             .Up => {
                 if (self.y == 0) return null;
                 return Plot{ .x = self.x, .y = self.y - 1 };
+            },
+            .UpRight => {
+                if (self.x + 1 == COLUMNS or self.y == 0) return null;
+                return Plot{ .x = self.x + 1, .y = self.y - 1 };
             },
             .Right => {
                 if (self.x + 1 == COLUMNS) return null;
                 return Plot{ .x = self.x + 1, .y = self.y };
             },
+            .DownRight => {
+                if (self.x + 1 == COLUMNS or self.y + 1 == ROWS) return null;
+                return Plot{ .x = self.x + 1, .y = self.y + 1 };
+            },
             .Down => {
                 if (self.y + 1 == ROWS) return null;
                 return Plot{ .x = self.x, .y = self.y + 1 };
+            },
+            .DownLeft => {
+                if (self.x == 0 or self.y + 1 == ROWS) return null;
+                return Plot{ .x = self.x - 1, .y = self.y + 1 };
             },
         }
     }
@@ -116,19 +196,6 @@ const COLUMNS = blk: {
     const row = row_iterator.next().?;
     break :blk row.len;
 };
-
-// const input =
-//     \\RRRRIICCFF
-//     \\RRRRIICCCF
-//     \\VVRRRCCFFF
-//     \\VVRCCCJFFF
-//     \\VVVVCJJCFE
-//     \\VVIVCCJJEE
-//     \\VVIIICJJEE
-//     \\MIIIIIJJEE
-//     \\MIIISIJEEE
-//     \\MMMISSJEEE
-// ;
 
 const input =
     \\RRRRJJKKKKKKKKKKKKKKKKKKKKKNEEEEEEEEEEEMMMMMMMMMMMMMMZZZZZZZZZZZUUUUUURXXXXXXXXXXXXDDDDDDQQQQQQQOPPPOOOOOXXXXXXXHHYHBBBSKKKKKLLLBBBBBBBBBJBC
