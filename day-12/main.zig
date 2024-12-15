@@ -1,15 +1,14 @@
 const std = @import("std");
+const print = std.debug.print;
 
 pub fn main() void {
-    part1();
-}
+    const start = std.time.microTimestamp();
 
-fn part1() void {
-    var total_price_part1: usize = 0;
-    var total_price_part2: usize = 0;
-    var visited: Visited = [_][COLUMNS]bool{
-        [_]bool{false} ** COLUMNS,
-    } ** ROWS;
+    var total_price_part1: u32 = 0;
+    var total_price_part2: u32 = 0;
+
+    var visited: Visited = [_][COLUMNS]bool{[_]bool{false} ** COLUMNS} ** ROWS;
+
     for (0..ROWS) |y| {
         for (0..COLUMNS) |x| {
             if (visited[y][x]) continue;
@@ -22,8 +21,13 @@ fn part1() void {
         }
     }
 
-    std.debug.print("Total price part 1: {}\n", .{total_price_part1});
-    std.debug.print("Total price part 2: {}\n", .{total_price_part2});
+    print("Total price part 1: {}\n", .{total_price_part1});
+    print("Total price part 2: {}\n", .{total_price_part2});
+
+    const end = std.time.microTimestamp();
+    const micros = end - start;
+    const millis = @as(f32, @floatFromInt(micros)) / 1000;
+    std.debug.print("\nExecution time: {d:.3}ms\n", .{millis});
 }
 
 const Visited = [ROWS][COLUMNS]bool;
@@ -31,12 +35,12 @@ const Visited = [ROWS][COLUMNS]bool;
 const RegionExplorer = struct {
     visited: *Visited,
     plot_type: u8,
-    area: usize,
-    perimeter: usize,
-    corners: usize,
+    area: u32,
+    perimeter: u32,
+    corners: u32,
 
-    fn explore(starting_plot: Plot, visited: *Visited) [2]usize {
-        const plot_type = starting_plot.getChar();
+    fn explore(starting_plot: Plot, visited: *Visited) [2]u32 {
+        const plot_type = starting_plot.getPlotType();
         var self = RegionExplorer{
             .visited = visited,
             .plot_type = plot_type,
@@ -56,15 +60,16 @@ const RegionExplorer = struct {
             return;
         }
 
-        self.area += 1;
         self.visited[plot.y][plot.x] = true;
+
+        self.area += 1;
         self.corners += checkForCorners(plot);
 
-        var neighbour_count: usize = 0;
+        var neighbour_count: u32 = 0;
         const directions = [_]Direction{ .Left, .Up, .Right, .Down };
         for (directions) |direction| {
             const neighbour = plot.getAdjacant(direction) orelse continue;
-            if (neighbour.getChar() != self.plot_type) {
+            if (neighbour.getPlotType() != self.plot_type) {
                 continue;
             }
             neighbour_count += 1;
@@ -74,27 +79,27 @@ const RegionExplorer = struct {
         self.perimeter += 4 - neighbour_count;
     }
 
-    fn checkForCorners(plot: Plot) usize {
-        var corners: usize = 0;
-        const plot_type = plot.getChar();
+    fn checkForCorners(plot: Plot) u32 {
+        var corners: u32 = 0;
+        const plot_type = plot.getPlotType();
 
         const left = plot.getAdjacant(.Left);
         const up = plot.getAdjacant(.Up);
         const right = plot.getAdjacant(.Right);
         const down = plot.getAdjacant(.Down);
 
-        const outer_edge_checks = [_][2]?Plot{
+        const outer_corner_checks = [_][2]?Plot{
             .{ left, up },
             .{ up, right },
             .{ right, down },
             .{ down, left },
         };
 
-        for (outer_edge_checks) |adjacent_plots| {
+        for (outer_corner_checks) |adjacent_plots| {
             const a_adj, const b_adj = adjacent_plots;
 
-            const is_a_other = a_adj == null or a_adj.?.getChar() != plot_type;
-            const is_b_other = b_adj == null or b_adj.?.getChar() != plot_type;
+            const is_a_other = a_adj == null or a_adj.?.getPlotType() != plot_type;
+            const is_b_other = b_adj == null or b_adj.?.getPlotType() != plot_type;
 
             if (is_a_other and is_b_other) {
                 corners += 1;
@@ -106,19 +111,19 @@ const RegionExplorer = struct {
         const down_right = plot.getAdjacant(.DownRight);
         const down_left = plot.getAdjacant(.DownLeft);
 
-        const inner_edge_checks = [_][3]?Plot{
+        const inner_corner_checks = [_][3]?Plot{
             .{ left, up_left, up },
             .{ up, up_right, right },
             .{ right, down_right, down },
             .{ down, down_left, left },
         };
 
-        for (inner_edge_checks) |adjacent_plots| {
+        for (inner_corner_checks) |adjacent_plots| {
             const a_adj, const diag, const b_adj = adjacent_plots;
 
-            const is_a_same = a_adj != null and a_adj.?.getChar() == plot_type;
-            const is_diag_other = diag != null and diag.?.getChar() != plot_type;
-            const is_b_same = b_adj != null and b_adj.?.getChar() == plot_type;
+            const is_a_same = a_adj != null and a_adj.?.getPlotType() == plot_type;
+            const is_diag_other = diag != null and diag.?.getPlotType() != plot_type;
+            const is_b_same = b_adj != null and b_adj.?.getPlotType() == plot_type;
 
             if (is_a_same and is_diag_other and is_b_same) {
                 corners += 1;
@@ -139,7 +144,7 @@ const Plot = struct {
         return self.y * (COLUMNS + 1) + self.x;
     }
 
-    fn getChar(self: *const Plot) u8 {
+    fn getPlotType(self: *const Plot) u8 {
         return input[self.toInputIdx()];
     }
 
