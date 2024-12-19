@@ -40,22 +40,38 @@ pub fn main() !void {
     std.debug.print("\nExecution time: {d:.3}ms\n", .{millis});
 }
 
-fn solveB(x1: i64, x2: i64, xt: i64, y1: i64, y2: i64, yt: i64) !?i64 {
+// Linear equation system:
+//  I: xt = x1 * a + x2 * b
+// II: yt = y1 * a + y2 * b
+
+// Solve I for a
+// =>          xt  =  x1 * a + x2 * b
+// => xt - x2 * b  =  x1 * a
+// =>           a  =  (xt - x2 * b) / x1
+fn solveA(x1: i64, x2: i64, xt: i64, b: i64) !?i64 {
     return std.math.divExact(
         i64,
-        x1 * yt - y1 * xt,
-        x1 * y2 - y1 * x2,
+        xt - x2 * b,
+        x1,
     ) catch |err| switch (err) {
         error.UnexpectedRemainder => null,
         else => err,
     };
 }
 
-fn solveA(x1: i64, x2: i64, xt: i64, b: i64) !?i64 {
+// Put a into II and solve for b:
+// =>                yt  =  y1 * (xt - x2 * b) / x1 + y2 * b
+// =>                yt  =  (y1 * xt - y1 * x2 * b) / x1 + y2 * b
+// =>      yt * x1 / x1  =  (y1 * xt * x1 - y1 * x2 * b * x1) / x1 + y2 * b * x1 / x1
+// =>           yt * x1  =  y1 * xt * x1 - y1 * x2 * b * x1 + y2 * b * x1
+// => yt * x1 - y1 * xt  =  y2 * b * x1 - y1 * x2 * b
+// => yt * x1 - y1 * xt  =  b * (y2 * x1 - y1 * x2)
+// =>                 b  =  (yt * x1 - y1 * xt) / (y2 * x1 - y1 * x2)
+fn solveB(x1: i64, x2: i64, xt: i64, y1: i64, y2: i64, yt: i64) !?i64 {
     return std.math.divExact(
         i64,
-        xt - x2 * b,
-        x1,
+        yt * x1 - y1 * xt,
+        y2 * x1 - y1 * x2,
     ) catch |err| switch (err) {
         error.UnexpectedRemainder => null,
         else => err,
