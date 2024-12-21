@@ -1,9 +1,19 @@
 const std = @import("std");
 const print = std.debug.print;
 
-pub fn main() void {
+pub fn main() !void {
     const start = std.time.microTimestamp();
 
+    // part1();
+    try part2();
+
+    const end = std.time.microTimestamp();
+    const micros = end - start;
+    const millis = @as(f32, @floatFromInt(micros)) / 1000;
+    print("\nExecution time: {d:.3}ms\n", .{millis});
+}
+
+fn part1() void {
     var quadrant_counts = [_]u32{ 0, 0, 0, 0 };
 
     var input_iterator = InputIterator.init();
@@ -20,12 +30,83 @@ pub fn main() void {
     }
 
     print("Safety factor: {}\n", .{safety_factor});
-
-    const end = std.time.microTimestamp();
-    const micros = end - start;
-    const millis = @as(f32, @floatFromInt(micros)) / 1000;
-    print("\nExecution time: {d:.3}ms\n", .{millis});
 }
+
+const Robots = std.BoundedArray(CoordinateAndMove, INPUPT_LINES);
+
+fn part2() !void {
+    var robots = try Robots.init(0);
+
+    var input_iterator = InputIterator.init();
+    while (input_iterator.next()) |coordAndMove| try robots.append(coordAndMove);
+
+    try Grid.fromRobots(robots).printGrid(0);
+
+    for (0..100000) |seconds| {
+        for (robots.slice(), 0..) |robot, i| {
+            var coord, const move = robot;
+            robots.set(i, CoordinateAndMove{ coord.makeMove(move), move });
+        }
+
+        var in_a_row = false;
+        var grid = Grid.fromRobots(robots);
+        outer: for (grid.grid) |row| {
+            var num_in_a_row: u8 = 0;
+            for (row) |cell| {
+                switch (cell) {
+                    true => num_in_a_row += 1,
+                    false => num_in_a_row = 0,
+                }
+                if (num_in_a_row == 20) {
+                    in_a_row = true;
+                    break :outer;
+                }
+            }
+        }
+
+        if (in_a_row) {
+            try grid.printGrid(seconds + 1);
+        }
+    }
+}
+
+const Grid = struct {
+    grid: [ROWS][COLUMNS]bool,
+
+    fn init() Grid {
+        const grid: [ROWS][COLUMNS]bool = [_][COLUMNS]bool{
+            [_]bool{false} ** COLUMNS,
+        } ** ROWS;
+        return Grid{ .grid = grid };
+    }
+
+    fn fromRobots(robots: Robots) Grid {
+        var self = Grid.init();
+        for (robots.constSlice()) |robot| {
+            const coord, _ = robot;
+            self.grid[coord.y][coord.x] = true;
+        }
+        return self;
+    }
+
+    fn printGrid(self: *const Grid, seconds: usize) !void {
+        const file = try std.fs.cwd().createFile(
+            try std.fmt.allocPrint(std.heap.page_allocator, "{}.txt", .{seconds}),
+            .{ .read = true },
+        );
+        defer file.close();
+        for (self.grid) |row| {
+            for (row) |cell| {
+                const c = switch (cell) {
+                    true => "🤖",
+                    false => "⬛",
+                };
+                _ = try file.write(c);
+            }
+            _ = try file.write("\n");
+        }
+    }
+};
 
 const ROWS = 103;
 const COLUMNS = 101;
@@ -77,6 +158,8 @@ const Coordinate = struct {
     }
 };
 
+const CoordinateAndMove = struct { Coordinate, Move };
+
 const InputIterator = struct {
     lines_iterator: std.mem.SplitIterator(u8, .sequence),
 
@@ -85,7 +168,7 @@ const InputIterator = struct {
         return InputIterator{ .lines_iterator = lines_iterator };
     }
 
-    fn next(self: *InputIterator) ?struct { Coordinate, Move } {
+    fn next(self: *InputIterator) ?CoordinateAndMove {
         const line = self.lines_iterator.next() orelse return null;
 
         var line_iterator = std.mem.splitAny(u8, line, "=, ");
@@ -109,6 +192,14 @@ const InputIterator = struct {
             },
         };
     }
+};
+
+const INPUPT_LINES = blk: {
+    @setEvalBranchQuota(100000);
+    var line_iterator = std.mem.splitSequence(u8, input, "\n");
+    var lines = 0;
+    while (line_iterator.next()) |_| lines += 1;
+    break :blk lines;
 };
 
 const input =
